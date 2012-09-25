@@ -16,7 +16,10 @@ version:             0.1.0.0
 synopsis:            CMA-ES wrapper in Haskell
 
 -- A longer description of the package.
--- description:         
+description:         
+  @cmaes@ is a wrapper for Covariance Matrix Adaptation Evolution Strategy(CMA-ES), an evolutionary algorithm for difficult non-linear non-convex optimization problems in continuous domain.
+  .
+  Nikolaus Hansen's  <http://www.lri.fr/~hansen/cmaesintro.html>
 
 -- The license under which the package is released.
 license:             MIT
@@ -34,7 +37,7 @@ maintainer:          muranushi@gmail.com
 -- A copyright notice.
 -- copyright:           
 
-category:            Math
+category:            Numerical, Optimization, Algorithms
 
 build-type:          Simple
 
@@ -44,7 +47,7 @@ cabal-version:       >=1.8
 
 library
   -- Modules exported by the library.
-  -- exposed-modules:     
+  exposed-modules:   Numeric.Optimization.Algorithms.CMAES  
   
   -- Modules included in this library but not exported.
   -- other-modules:       
