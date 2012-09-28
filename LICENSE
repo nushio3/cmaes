@@ -1,2 +1,4 @@
-This package is an aggregate of programs. cma.py is licensed under GPL
-2 and 3. The other programs are licensed under BSD 3-Clause license.
+This package is an aggregate of programs. cma.py (c) Nikolaus Hansen,
+2008-2012 is redistributed under GPL 2 and 3. The other programs (c)
+Takayuki Muranushi are licensed under BSD 3-Clause license. See the
+files LICENSE.GPL2, LICENSE.GPL3 and LICENSE.BSD3 for more details.
