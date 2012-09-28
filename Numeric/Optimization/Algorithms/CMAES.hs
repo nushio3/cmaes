@@ -67,8 +67,8 @@ run Config{..} = do
 
 
 wrapperFn, commHeader :: String
-wrapperFn = "cma_wrapper.py"
-commHeader = "<CMA_WRAPPER_PY2HS>"
+wrapperFn = "cmaes_wrapper.py"
+commHeader = "<CMAES_WRAPPER_PY2HS>"
 
 recvLine :: Handle -> IO String
 recvLine h = do
