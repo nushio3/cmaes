@@ -35,7 +35,7 @@ minimizerIO xs fIO = defaultConfig{ funcIO = fIO, initXs = xs}
 
 run :: Config -> IO [Double]
 run Config{..} = do
-  fn <- getDataFileName wrapFn          
+  fn <- getDataFileName wrapperFn          
   (Just hin, Just hout, _, _) <- createProcess (proc "python2" [fn])
     { std_in = CreatePipe, std_out = CreatePipe }
   sendLine hin $ unwords (map show initXs)
@@ -66,9 +66,9 @@ run Config{..} = do
         Just xs -> [("scaling_of_variables", show xs)]
 
 
-wrapFn, commHeader :: String
-wrapFn = "cmaes_wrap.py"
-commHeader = "<CMAES_WRAP_PY2HS>"
+wrapperFn, commHeader :: String
+wrapperFn = "cma_wrapper.py"
+commHeader = "<CMA_WRAPPER_PY2HS>"
 
 recvLine :: Handle -> IO String
 recvLine h = do
