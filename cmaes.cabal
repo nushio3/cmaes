@@ -12,20 +12,27 @@ description:
     Nikolaus Hansen's production-level CMA library.  Download it from
     <http://www.lri.fr/~hansen/cmaes_inmatlab.html#python>.  and place
     it under your Python module search path.
-license:             BSD3
+license:             OtherLicense
 license-file:        LICENSE
 author:              Takayuki Muranushi
 maintainer:          muranushi@gmail.com
 category:            Numerical, Optimization, Algorithms
 build-type:          Simple
 cabal-version:       >=1.8
+
+
+Data-Files:          cmaes_wrap.py
+
 library
   exposed-modules:   Numeric.Optimization.Algorithms.CMAES  
   -- other-modules:       
-  build-depends:       base ==4.*
-  
+  build-depends:     base ==4.*
+                   , process
+
 Test-Suite test
   Main-Is:           Test.hs
   Hs-Source-Dirs:    test, .
   Type:              exitcode-stdio-1.0
   Build-Depends:     base == 4.*
+                   , cmaes
+                   , process
