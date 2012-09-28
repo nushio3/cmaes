@@ -51,65 +51,54 @@
 
 #source("cmaes.m")
 
-args = argv();
-cmd = args{1};
-if(size(args,2) <= 1)
-  arguments = { };
-else
-  arguments = args{2:size(args,2)};
-endif
-
-if(strcmp(cmd, "-qf") == 1)
-  disp("Usage: ./cmaes_wrap program args");
-  exit(1);
-endif
-
-function boot(cmd, arguments)
-  global ipipe;
-  global opipe;
-  disp("Starting process...");
-
-  [ipipe, opipe, pid] = popen2(cmd, arguments);
-  if(pid == -1)
-    disp("Unable to start process ", cmd);
-  endif
-endfunction
+# global opipe = stdin;
+# global ipipe = stdout;
+# 
+# function line = getline
+#   global opipe;
+#   EAGAIN = errno("EAGAIN");
+#   do
+#     fclear(opipe);
+#     s=fgets(opipe)
+#     if(ischar(s))
+#       line = s;
+#       return;
+#     elseif(errno() == EAGAIN)
+#       sleep(0.1);
+#     else
+#       disp("Failed to read line from subprocess!");
+#       exit(1);
+#     endif
+#   until(false)
+# endfunction
 
 function line = getline
-  global opipe;
-  EAGAIN = errno("EAGAIN");
-  do
-    fclear(opipe);
-    s=fgets(opipe)
-    if(ischar(s))
-      line = s;
-      return;
-    elseif(errno() == EAGAIN)
-      sleep(0.1);
-    else
-      disp("Failed to read line from subprocess!");
-      exit(1);
-    endif
-  until(false)
+  line= fgets(stdin)
 endfunction
+
+# function putline(str)
+#   global ipipe;
+#   EAGAIN = errno("EAGAIN");
+#   EOF = errno('EOF');
+#   fputs(stderr,str);
+#   do
+#     r=fputs(ipipe, ["<CMAES_WRAP_HS> " str "\n"])
+#     if(r == EOF)
+#       disp("Failed to send line to subprocess!");
+#       exit(1);
+#     else
+#       fflush(ipipe);
+#       return;
+#     endif
+#   until(false)
+# endfunction
 
 function putline(str)
-  global ipipe;
-  EAGAIN = errno("EAGAIN");
-  EOF = errno('EOF');
-  do
-    r=fputs(ipipe, [str "\n"])
-    if(r == EOF)
-      disp("Failed to send line to subprocess!");
-      exit(1);
-    else
-      fflush(ipipe);
-      return;
-    endif
-  until(false)
+  r=fputs(stdout, ["<CMAES_WRAP_HS> " str "\n"])
+  fflush(stdout)
 endfunction
 
-boot(cmd, arguments);
+
 putline("parameter");
 params = getline();
 
@@ -124,6 +113,7 @@ if(strcmp(noisemode, "noise"))
   opts.Noise.on=1;
 end
 
+opts.DispModulo = 0
 opts.TolFun = sscanf(sp{:,5}, "%f");
 
 opts.SaveFilename = [jobname "_save.mat"];
@@ -157,7 +147,4 @@ function res = pipedeval(xs, args)
 endfunction
 
 xmin = cmaes('pipedeval', xinival', xinisig', opts, {})
-printf("%s\n", sprintf("%.14e ", xmin))
-
-# putline(sprintf("%.14e ", xmin))
-# lastmsg = getline()
+putline("success %s\n", sprintf("%.14e ", xmin))
