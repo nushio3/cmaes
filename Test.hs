@@ -1,10 +1,10 @@
 import Numeric.Optimization.Algorithms.CMAES
 
 -- a function with minimum at x[i]=sqrt(i)
-f xs = sum $ zipWith (\x i -> abs(x**2-i)) xs [1..]
+f xs = sum $ zipWith (\x i -> abs $ x**2-i) xs [1..]
 
 -- a function with scale diversity
-f2 xs = sum $ zipWith (\x i -> abs(x/1e4**i)**2-i)) xs [1..]
+f2 xs = sum $ zipWith (\x i -> abs $ (x/1e4**i)**2-i ) xs [1..]
 
 main = do
   -- this works fine

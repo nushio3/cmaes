@@ -2,12 +2,13 @@ name:                cmaes
 version:             0.1.0.0
 synopsis:            CMA-ES wrapper in Haskell
 description:
+
   @cmaes@ is a wrapper for Covariance Matrix Adaptation Evolution
   Strategy(CMA-ES), an evolutionary algorithm for difficult non-linear
   non-convex optimization problems in continuous domain. To use this
-  package you need python2 available on your system. The package
-  includes @cma.py@ , Nikolaus Hansen's production-level CMA library:
-  <http://www.lri.fr/~hansen/cmaes_inmatlab.html#python>.
+  package you need python2 with numpy available on your system. The
+  package includes @cma.py@ , Nikolaus Hansen's production-level CMA
+  library: <http://www.lri.fr/~hansen/cmaes_inmatlab.html#python>.
 
 license:             OtherLicense
 license-file:        LICENSE
@@ -28,7 +29,7 @@ library
 
 Test-Suite test
   Main-Is:           Test.hs
-  Hs-Source-Dirs:    test, .
+  Hs-Source-Dirs:    Test, .
   Type:              exitcode-stdio-1.0
   Build-Depends:     base == 4.*
                    , cmaes
