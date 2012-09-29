@@ -292,7 +292,7 @@ of generic data types. Let's test them.
 
 Putting back the obtained values should not change the data.
 
->>> type Complicated = ([[[Double]]],(),(([(Double,String)]),[Double]))
+>>> type Complicated = ([[Double]],(),(([(Double,String)]),[Double]))
 >>> prop ((\x -> putDoubles (getDoubles x) x == x) :: Complicated -> Bool)
 Success
 
