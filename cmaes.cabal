@@ -41,6 +41,7 @@ Test-Suite test
                    , mtl  
                    , process
                    , syb
+                   , vector
 
 source-repository head
   type:              git
