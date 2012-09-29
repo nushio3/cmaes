@@ -20,8 +20,7 @@ def communicator(xs):
 # set default options
 opts = cma.Options()
 opts['CMA_active'] = True
-opts['tolfun'] = 0
-opts['tolfacupx'] = 1e99
+opts['tolfunhist'] = 0
 
 # read initial guesses
 initxs = map(float, recvline().split())

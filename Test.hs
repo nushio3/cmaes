@@ -13,20 +13,20 @@ f2 xs = sum $ zipWith g xs [1..]
 
 main = do
   -- this works fine
-  xs <- run $ minimizer [1..10] f
+  xs <- run $ minimizer f [1..10] 
   print xs
   print $ f xs
 
   -- if the scale for parameters differ too much
   -- it doesn't work very well
-  xs <-run $ minimizer [1..10] f2
+  xs <-run $ minimizer f2 [1..10] 
   print xs
   print $ f2 xs
 
   -- you need to hint the optimizer with the
   -- appropriate scales
   xs <- run $
-         (minimizer [1..10] f2)
+         (minimizer f2 [1..10])
            {scaling = Just [1e10**i | i<-[1..10] ] }
   print xs
   print $ f2 xs

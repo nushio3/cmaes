@@ -1,41 +1,85 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS -Wall #-}
+
+-- | Module Description.
+-- If your optimization is not working well, try:
+--
+-- * Set @scaling@ in the @Config@ to the appropriate search
+--   range of each parameter.
+--
+-- * Set @tolFun@ in the @Config@ to the appropriate scale of
+--   the function values.
+
 module Numeric.Optimization.Algorithms.CMAES (
-       run, Config(..),
-       minimizer, minimizerIO, 
+       run, Config(..), defaultConfig,
+       minimizer, minimizerIO,
 )where
 
-import Control.Monad 
+
+import Control.Monad
 import Data.List (isPrefixOf)
+import Data.Maybe
 import System.IO
 import System.Process
 
 import Paths_cmaes
 
+-- | Optimizer configuration.
 data Config = Config
-  { funcIO  :: [Double] -> IO Double
-  , initXs  :: [Double] 
-  , sigma0  :: Double
-  , scaling :: Maybe [Double]
+  { funcIO        :: [Double] -> IO Double
+    -- ^ The Function to be optimized.
+  , initXs        :: [Double]
+    -- ^ An initial guess of the solution.
+  , sigma0        :: Double
+    -- ^ The global scaling factor.
+  , scaling       :: Maybe [Double]
+    -- ^ Typical deviation of each input parameters.
+  , typicalXs       :: Maybe [Double]
+    -- ^ Typical mean of each input parameters.
+  , tolFacUpX     :: Maybe Double
+    -- ^ Terminate when one of the scaling grew too big
+    -- (initial scaling was too small.)
+  , tolUpSigma    :: Maybe Double
+    -- ^ Terminate when the global scaling grew too big.
+  , tolFun        :: Maybe Double
+    -- ^ Terminate when the function value diversity in the current
+    -- and last few generations is smaller than this value
+  , tolStagnation :: Maybe Int
+    -- ^ Terminate when the improvement is not seen for this number
+    -- of iterations.
+  , tolX          :: Maybe Double
+    -- ^ Terminate when the deviations in the solutions are smaller
+    -- than this value.
   }
 
+-- | The default @Config@ values.
 defaultConfig :: Config
 defaultConfig = Config
   { funcIO = error "funcIO undefined"
   , initXs = error "initXs undefined"
   , sigma0 = 0.25
   , scaling = Nothing
+  , typicalXs = Nothing
+  , tolFacUpX = Just 1e10
+  , tolUpSigma = Just 1e20
+  , tolFun = Just 1e-11
+  , tolStagnation = Nothing
+  , tolX = Just 1e-11
   }
 
-minimizer :: [Double] -> ([Double]-> Double) -> Config
-minimizer xs f = defaultConfig{ funcIO =  return . f, initXs = xs}
 
-minimizerIO :: [Double] -> ([Double]-> IO Double) -> Config
-minimizerIO xs fIO = defaultConfig{ funcIO = fIO, initXs = xs}
+-- | Create a minimizing problem, given a pure function and an initial guess.
+minimizer :: ([Double]-> Double) -> [Double] -> Config
+minimizer f xs = defaultConfig{ funcIO =  return . f, initXs = xs}
 
+-- | Create a minimizing problem, given an @IO@ function and an initial guess.
+minimizerIO :: ([Double]-> IO Double) -> [Double] -> Config
+minimizerIO fIO xs = defaultConfig{ funcIO = fIO, initXs = xs}
+
+-- | Execute the optimizer and get the solution.
 run :: Config -> IO [Double]
 run Config{..} = do
-  fn <- getDataFileName wrapperFn          
+  fn <- getDataFileName wrapperFn
   (Just hin, Just hout, _, _) <- createProcess (proc "python2" [fn])
     { std_in = CreatePipe, std_out = CreatePipe }
   sendLine hin $ unwords (map show initXs)
@@ -55,15 +99,23 @@ run Config{..} = do
           sendLine hin $ show ans
           loop
         _ -> do
-          fail "ohmy god        "
+          fail "ohmy god"
   loop
     where
       options :: [(String, String)]
-      options = concat [kvpScaling]
+      options = concat $ map maybeToList
+        [ "scaling_of_variables" `is` scaling
+        , "typical_x"            `is` typicalXs
+        , "tolfacupx"            `is` tolFacUpX
+        , "tolupsigma"           `is` tolUpSigma
+        , "tolfun"               `is` tolFun
+        , "tolstagnation"        `is` tolStagnation
+        , "tolx"                 `is` tolX
+        ]
 
-      kvpScaling = case scaling of
-        Nothing -> []
-        Just xs -> [("scaling_of_variables", show xs)]
+      is :: Show a => String -> Maybe a -> Maybe (String,String)
+      is key = fmap (\val -> (key, show val))
+
 
 
 wrapperFn, commHeader :: String
@@ -82,4 +134,3 @@ sendLine :: Handle -> String -> IO ()
 sendLine h str = do
   hPutStrLn h str
   hFlush h
-
