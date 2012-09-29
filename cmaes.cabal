@@ -36,6 +36,11 @@ Test-Suite test
   Build-Depends:     base == 4.*
                    , cmaes
                    , doctest >=0.8
+                   , doctest-prop >=0.2
                    , mtl  
                    , process
                    , syb
+
+source-repository head
+  type:              git
+  location:          git://github.com/nushio3/cmaes.git

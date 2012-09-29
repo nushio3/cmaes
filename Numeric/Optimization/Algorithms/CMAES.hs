@@ -17,11 +17,11 @@ Usage:
 Let's optimize the following function /f(xs)/. @xs@ is a vector and
 @f@ has its minimum at @xs !! i = sqrt(i)@.
 
+>>> import Test.DocTest.Prop
 >>> let f = sum . zipWith (\i x -> (x*abs x - i)**2) [0..] :: [Double] -> Double
 >>> let initXs = replicate 10 0                            :: [Double]
 >>> bestXs <- run $ minimize f initXs
->>> f bestXs < 1e-10
-True
+>>> assert $ f bestXs < 1e-10
 
 If your optimization is not working well, try:
 
@@ -35,8 +35,7 @@ An example for scaling the function value:
 
 >>> let f2 xs = (/1e100) $ sum $ zipWith (\i x -> (x*abs x - i)**2) [0..] xs
 >>> bestXs <- run $ (minimize f2 $ replicate 10 0) {tolFun = Just 1e-111}
->>> f2 bestXs < 1e-110
-True
+>>> assert $ f2 bestXs < 1e-110
 
 An example for scaling the input values:
 
@@ -44,32 +43,31 @@ An example for scaling the input values:
 >>> let xs30 = replicate 10 0 :: [Double]
 >>> let m3 = (minimize f3 xs30) {scaling = Just (replicate 10 1e50)}
 >>> xs31 <- run $ m3
->>> f3 xs31 / f3 xs30 < 1e-10
-True
+>>> assert $ f3 xs31 / f3 xs30 < 1e-10
 
 Use @minimizeT@ to optimize functions on traversable structures.
 
 >>> import qualified Data.Vector as V
 >>> let f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2) :: V.Vector Double -> Double
->>> bestVx <- run $ minimizeT f4 $ V.replicate 10 0              
->>> f4 bestVx < 1e-10
-True
+>>> bestVx <- run $ minimizeT f4 $ V.replicate 10 0
+>>> assert $ f4 bestVx < 1e-10
+
 
 
 Or use @minimizeG@ to optimize functions of almost any type. Let's create a triangle ABC
 so that AB = 3, AC = 4, BC = 5.
 
 >>> let dist (ax,ay) (bx,by) = ((ax-bx)**2 + (ay-by)**2)**0.5
->>> let f5 [a,b,c] = (dist a b - 3.0)**2 + (dist a c - 4.0)**2 + (dist b c - 5.0)**2 
+>>> let f5 [a,b,c] = (dist a b - 3.0)**2 + (dist a c - 4.0)**2 + (dist b c - 5.0)**2
 >>> bestTriangle <- run $ (minimizeG f5 [(0,0),(0,0),(0,0)]){tolFun = Just 1e-20}
->>> f5 bestTriangle < 1e-10
-True
+>>> assert $ f5 bestTriangle < 1e-10
+
 
 Then the angle BAC should be orthogonal.
 
 >>> let [(ax,ay),(bx,by),(cx,cy)] = bestTriangle
->>> abs ((bx-ax)*(cx-ax) + (by-ay)*(cy-ay)) < 1e-10
-True
+>>> assert $ abs ((bx-ax)*(cx-ax) + (by-ay)*(cy-ay)) < 1e-10
+
 
 
 -}
@@ -78,14 +76,15 @@ True
 module Numeric.Optimization.Algorithms.CMAES (
        run, Config(..), defaultConfig,
        minimize, minimizeIO,
-       minimizeT, minimizeTIO
+       minimizeT, minimizeTIO,
+       minimizeG, minimizeGIO,
 )where
 
 
 import           Control.Monad hiding (forM_, mapM)
 import qualified Control.Monad.State as State
 import           Data.Data
-import           Data.Generics 
+import           Data.Generics
 import           Data.List (isPrefixOf)
 import           Data.Maybe
 import           Data.Foldable
@@ -95,15 +94,6 @@ import           System.Process
 import           Prelude hiding (concat, mapM, sum)
 
 import Paths_cmaes
-
-import Test.QuickCheck
-
-prop :: Testable p => p -> IO ()
-prop p = do
-  r <- quickCheckWithResult (stdArgs{chatty=False}) p
-  case r of
-    Success _ _ _ -> putStrLn "Success"
-    _ -> print r
 
 
 -- | Optimizer configuration. @tgt@ is the type of the value to be
@@ -168,7 +158,7 @@ minimize f xs = minimizeIO (return . f) xs
 
 -- | Create a minimizing problem, given an @IO@ function and an initial guess.
 minimizeIO :: ([Double]-> IO Double) -> [Double] -> Config [Double]
-minimizeIO fIO xs = 
+minimizeIO fIO xs =
   defaultConfig
   { funcIO     = fIO
   , initXs     = xs
@@ -250,7 +240,7 @@ run Config{..} = do
       wrapperFn, commHeader :: String
       wrapperFn = "cmaes_wrapper.py"
       commHeader = "<CMAES_WRAPPER_PY2HS>"
-      
+
       recvLine :: Handle -> IO String
       recvLine h = do
         str <- hGetLine h
@@ -259,7 +249,7 @@ run Config{..} = do
           then return $ unwords $ drop 1 $ words str
           else do
             recvLine h
-      
+
       sendLine :: Handle -> String -> IO ()
       sendLine h str = do
         hPutStrLn h str
@@ -292,15 +282,14 @@ of generic data types. Let's test them.
 
 Putting back the obtained values should not change the data.
 
+>>> import Test.DocTest.Prop
 >>> type Complicated = ([[Double]],(),(([(Double,String)]),[Double]))
 >>> prop ((\x -> putDoubles (getDoubles x) x == x) :: Complicated -> Bool)
-Success
 
 You can get the original list back after putting it.
 
 >>> let make3 xs = take 3 $ xs ++ [0..]
 >>> prop ((\xs' y -> let xs = make3 xs' in getDoubles (putDoubles xs y)==xs) :: [Double] -> (Double,Double,Double) -> Bool)
-Success
 
 
 
