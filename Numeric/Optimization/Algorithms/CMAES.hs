@@ -112,8 +112,12 @@ data Config tgt = Config
     -- ^ The global scaling factor.
   , scaling       :: Maybe [Double]
     -- ^ Typical deviation of each input parameters.
+    -- The length of the list is adjusted to be the same as
+    -- initXs, so it can be an infinite list.
   , typicalXs     :: Maybe [Double]
     -- ^ Typical mean of each input parameters.
+    -- The length of this list too, is adjusted to be the same as
+    -- initXs.
   , tolFacUpX     :: Maybe Double
     -- ^ Terminate when one of the scaling grew too big
     -- (initial scaling was too small.)
@@ -223,10 +227,18 @@ run Config{..} = do
           fail "ohmy god"
   loop
     where
+      probDim :: Int
+      probDim = length initXs
+
+      adjustDim :: [a] -> [a] -> [a]
+      adjustDim supply orig =
+        [if i < length orig then orig!!i else supply!!i
+        | i <- [0..probDim-1]]
+
       options :: [(String, String)]
       options = concat $ map maybeToList
-        [ "scaling_of_variables" `is` scaling
-        , "typical_x"            `is` typicalXs
+        [ "scaling_of_variables" `is` (fmap$adjustDim [1..] ) scaling
+        , "typical_x"            `is` (fmap$adjustDim initXs) typicalXs
         , "tolfacupx"            `is` tolFacUpX
         , "tolupsigma"           `is` tolUpSigma
         , "tolfunhist"           `is` tolFun
@@ -295,7 +307,7 @@ You can get the original list back after putting it.
 
 -}
 
-getDoubles :: Data d => d -> [Double]
+getDoubles :: Data a => a -> [Double]
 getDoubles d = reverse $ State.execState (everywhereM getter d) []
   where
     getter :: GenericM (State.State [Double])
@@ -304,19 +316,19 @@ getDoubles d = reverse $ State.execState (everywhereM getter d) []
       let da = fmap (flip asTypeOf (head ys)) $ cast a
       case da of
         Nothing -> return a
-        Just d -> do
-          State.put $ d:ys
+        Just dd -> do
+          State.put $ dd:ys
           return a
 
-putDoubles :: Data d => [Double] -> d -> d
+putDoubles :: Data a => [Double] -> a -> a
 putDoubles ys0 d = State.evalState (everywhereM putter d) ys0
   where
     putter :: GenericM (State.State [Double])
-    putter a = do
+    putter a0 = do
       ys <- State.get
-      let ma' = (cast =<<) $ fmap (asTypeOf (head ys)) $ cast a
-      case ma' of
-        Nothing -> return a
-        Just a' -> do
+      let ma1 = (cast =<<) $ fmap (asTypeOf (head ys)) $ cast a0
+      case ma1 of
+        Nothing -> return a0
+        Just a1 -> do
           State.put $ tail ys
-          return a'
+          return a1
