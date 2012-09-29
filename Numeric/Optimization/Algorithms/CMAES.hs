@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards,ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes, RecordWildCards,ScopedTypeVariables #-}
 {-# OPTIONS -Wall #-}
 
 
@@ -11,6 +11,13 @@ Usage:
 
 (2) @run@ it.
 
+>>> let d3 = (1,2,3) :: (Double,Int,Double)
+>>> setDoubles [4,5] d3
+(4.0,2,5.0)
+
+>>> let complicated = (1,(2,[3,4])) :: (Double,(Double,[Double]))
+>>> setDoubles [5,6,7,8] complicated
+(5.0,(6.0,[7.0,8.0]))
 
 
 Let's optimize the following function /f(xs)/. @xs@ is a vector and
@@ -67,6 +74,8 @@ module Numeric.Optimization.Algorithms.CMAES (
 
 import           Control.Monad hiding (forM_, mapM)
 import qualified Control.Monad.State as State
+import           Data.Data
+import           Data.Generics 
 import           Data.List (isPrefixOf)
 import           Data.Maybe
 import           Data.Foldable
@@ -74,6 +83,7 @@ import           Data.Traversable
 import           System.IO
 import           System.Process
 import           Prelude hiding (concat, mapM, sum)
+
 
 import Paths_cmaes
 
@@ -230,3 +240,16 @@ zipTWith op xs0 ys0 = State.evalState (mapM zipper xs0) (toList ys0)
       (y:ys) <- State.get
       State.put ys
       return (op x y)
+
+setDoubles :: Data d => [Double] -> d -> d
+setDoubles ys0 d = snd $ gmapAccumT putter ys0 d
+  where
+    putter :: forall e. Data e => [Double] -> e -> ([Double], e)
+    putter ys e = case tryPut ys e of
+      Nothing  -> (ys, e)
+      Just ret -> ret
+    tryPut ys e = do
+      let (h:t) = ys
+      de <- cast e
+      eh <- cast $ h `asTypeOf` de
+      return (t,eh)
