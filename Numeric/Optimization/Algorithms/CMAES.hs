@@ -1,14 +1,52 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS -Wall #-}
 
--- | Module Description.
--- If your optimization is not working well, try:
---
--- * Set @scaling@ in the @Config@ to the appropriate search
---   range of each parameter.
---
--- * Set @tolFun@ in the @Config@ to the appropriate scale of
---   the function values.
+
+{-|
+
+Usage:
+
+(1) create an optimization problem of type @Config@ by one of
+    @minimizer@, @minimizerIO@ etc.
+
+(2) @run@ it.
+
+Let's optimize the following function /f(xs)/. @xs@ is a vector and
+@f@ has its minimum at @xs !! i = sqrt(i)@.
+
+>>> let f xs = sum $ zipWith (\i x -> (x*abs x - i)**2) [0..] xs
+>>> bestXs <- run $ minimizer f $ replicate 10 0
+>>> f bestXs < 1e-10
+True
+
+If your optimization is not working well, try:
+
+* Set @scaling@ in the @Config@ to the appropriate search
+  range of each parameter.
+
+* Set @tolFun@ in the @Config@ to the appropriate scale of
+  the function values.
+
+An example for scaling the function value:
+
+>>> let f2 xs = (/1e100) $ sum $ zipWith (\i x -> (x*abs x - i)**2) [0..] xs
+>>> bestXs <- run $ (minimizer f2 $ replicate 10 0) {tolFun = Just 1e-111}
+>>> f2 bestXs < 1e-110
+True
+
+An example for scaling the input values:
+
+>>> let f3 xs = sum $ zipWith (\i x -> (x*abs x - i)**2) [0,1e100..] xs
+>>> let xs0 = replicate 10 0 :: [Double]
+>>> let m3 = (minimizer f3 xs0) {scaling = Just (replicate 10 1e50)}
+>>> xs1 <- run $ m3
+>>> f3 xs1 / f3 xs0 < 1e-10
+True
+
+-}
+
+
+
 
 module Numeric.Optimization.Algorithms.CMAES (
        run, Config(..), defaultConfig,
@@ -50,7 +88,10 @@ data Config = Config
   , tolX          :: Maybe Double
     -- ^ Terminate when the deviations in the solutions are smaller
     -- than this value.
+  , verbose       :: Bool
+    -- ^ Repeat the CMA-ES output into stderr.
   }
+
 
 -- | The default @Config@ values.
 defaultConfig :: Config
@@ -65,6 +106,7 @@ defaultConfig = Config
   , tolFun = Just 1e-11
   , tolStagnation = Nothing
   , tolX = Just 1e-11
+  , verbose = False
   }
 
 
@@ -108,7 +150,7 @@ run Config{..} = do
         , "typical_x"            `is` typicalXs
         , "tolfacupx"            `is` tolFacUpX
         , "tolupsigma"           `is` tolUpSigma
-        , "tolfun"               `is` tolFun
+        , "tolfunhist"           `is` tolFun
         , "tolstagnation"        `is` tolStagnation
         , "tolx"                 `is` tolX
         ]
@@ -116,21 +158,20 @@ run Config{..} = do
       is :: Show a => String -> Maybe a -> Maybe (String,String)
       is key = fmap (\val -> (key, show val))
 
-
-
-wrapperFn, commHeader :: String
-wrapperFn = "cmaes_wrapper.py"
-commHeader = "<CMAES_WRAPPER_PY2HS>"
-
-recvLine :: Handle -> IO String
-recvLine h = do
-  str <- hGetLine h
-  if commHeader `isPrefixOf` str
-    then return $ unwords $ drop 1 $ words str
-    else do
-      recvLine h
-
-sendLine :: Handle -> String -> IO ()
-sendLine h str = do
-  hPutStrLn h str
-  hFlush h
+      wrapperFn, commHeader :: String
+      wrapperFn = "cmaes_wrapper.py"
+      commHeader = "<CMAES_WRAPPER_PY2HS>"
+      
+      recvLine :: Handle -> IO String
+      recvLine h = do
+        str <- hGetLine h
+        when (verbose) $ hPutStrLn stderr str
+        if commHeader `isPrefixOf` str
+          then return $ unwords $ drop 1 $ words str
+          else do
+            recvLine h
+      
+      sendLine :: Handle -> String -> IO ()
+      sendLine h str = do
+        hPutStrLn h str
+        hFlush h
