@@ -1,5 +1,5 @@
 name:                cmaes
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            CMA-ES wrapper in Haskell
 description:
 
@@ -19,6 +19,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 
+Extra-Source-Files:  LICENSE.GPL2, LICENSE.GPL3, LICENSE.MIT
 Data-Files:          cma.py, cmaes_wrapper.py
 
 library
