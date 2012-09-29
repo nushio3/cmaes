@@ -113,7 +113,7 @@ data Config tgt = Config
   , scaling       :: Maybe [Double]
     -- ^ Typical deviation of each input parameters.
     -- The length of the list is adjusted to be the same as
-    -- initXs, so it can be an infinite list.
+    -- initXs, e.g. you can lazily use an infinite list here.
   , typicalXs     :: Maybe [Double]
     -- ^ Typical mean of each input parameters.
     -- The length of this list too, is adjusted to be the same as
