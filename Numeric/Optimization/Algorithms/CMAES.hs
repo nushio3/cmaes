@@ -46,8 +46,6 @@ True
 -}
 
 
-
-
 module Numeric.Optimization.Algorithms.CMAES (
        run, Config(..), defaultConfig,
        minimizer, minimizerIO,
