@@ -11,13 +11,7 @@ Usage:
 
 (2) @run@ it.
 
->>> let d3 = (1,2,3) :: (Double,Int,Double)
->>> setDoubles [4,5] d3
-(4.0,2,5.0)
 
->>> let complicated = (1,(2,[3,4])) :: (Double,(Double,[Double]))
->>> setDoubles [5,6,7,8] complicated
-(5.0,(6.0,[7.0,8.0]))
 
 
 Let's optimize the following function /f(xs)/. @xs@ is a vector and
@@ -62,6 +56,22 @@ Use @minimizeT@ to optimize functions on traversable structures.
 True
 
 
+Or use @minimizeG@ to optimize functions of almost any type. Let's create a triangle ABC
+so that AB = 3, AC = 4, BC = 5.
+
+>>> let dist (ax,ay) (bx,by) = ((ax-bx)**2 + (ay-by)**2)**0.5
+>>> let f5 [a,b,c] = (dist a b - 3.0)**2 + (dist a c - 4.0)**2 + (dist b c - 5.0)**2 
+>>> bestTriangle <- run $ (minimizeG f5 [(0,0),(0,0),(0,0)]){tolFun = Just 1e-20}
+>>> f5 bestTriangle < 1e-10
+True
+
+Then the angle BAC should be orthogonal.
+
+>>> let [(ax,ay),(bx,by),(cx,cy)] = bestTriangle
+>>> abs ((bx-ax)*(cx-ax) + (by-ay)*(cy-ay)) < 1e-10
+True
+
+
 -}
 
 
@@ -84,8 +94,17 @@ import           System.IO
 import           System.Process
 import           Prelude hiding (concat, mapM, sum)
 
-
 import Paths_cmaes
+
+import Test.QuickCheck
+
+prop :: Testable p => p -> IO ()
+prop p = do
+  r <- quickCheckWithResult (stdArgs{chatty=False}) p
+  case r of
+    Success _ _ _ -> putStrLn "Success"
+    _ -> print r
+
 
 -- | Optimizer configuration. @tgt@ is the type of the value to be
 -- optimized.
@@ -174,6 +193,19 @@ minimizeTIO fIO tx =
     proj = toList
     embd = zipTWith (\_ y -> y) tx
 
+-- | Create a minimizing problem for a function on almost any type @a@ which contain Doubles.
+minimizeG :: (Data a) => (a -> Double) -> a -> Config a
+minimizeG f tx = minimizeGIO (return . f) tx
+
+-- | Create a minimizing problem for an effectful function of almost any type.
+minimizeGIO :: (Data a) => (a -> IO Double) -> a -> Config a
+minimizeGIO fIO initA =
+  defaultConfig
+  { funcIO     = fIO
+  , initXs     = getDoubles initA
+  , projection = getDoubles
+  , embedding  = flip putDoubles initA
+  }
 
 -- | Execute the optimizer and get the solution.
 run :: forall tgt. Config tgt -> IO tgt
@@ -241,15 +273,61 @@ zipTWith op xs0 ys0 = State.evalState (mapM zipper xs0) (toList ys0)
       State.put ys
       return (op x y)
 
-setDoubles :: Data d => [Double] -> d -> d
-setDoubles ys0 d = snd $ gmapAccumT putter ys0 d
+{-|
+
+getDoubles and putDoubles are generic functions used to put [Double] in and out
+of generic data types. Let's test them.
+
+>>> let d3 = (1,2,3) :: (Double,Int,Double)
+>>> getDoubles d3
+[1.0,3.0]
+>>> putDoubles [4,5] d3
+(4.0,2,5.0)
+
+>>> let complicated = ([0,1],(2,[3,4])) :: ([Double],(Double,[Double]))
+>>> getDoubles complicated
+[0.0,1.0,2.0,3.0,4.0]
+>>> putDoubles [5,6,7,8,9] complicated
+([5.0,6.0],(7.0,[8.0,9.0]))
+
+Putting back the obtained values should not change the data.
+
+>>> type Complicated = ([[[Double]]],(),(([(Double,String)]),[Double]))
+>>> prop ((\x -> putDoubles (getDoubles x) x == x) :: Complicated -> Bool)
+Success
+
+You can get the original list back after putting it.
+
+>>> let make3 xs = take 3 $ xs ++ [0..]
+>>> prop ((\xs' y -> let xs = make3 xs' in getDoubles (putDoubles xs y)==xs) :: [Double] -> (Double,Double,Double) -> Bool)
+Success
+
+
+
+-}
+
+getDoubles :: Data d => d -> [Double]
+getDoubles d = reverse $ State.execState (everywhereM getter d) []
   where
-    putter :: forall e. Data e => [Double] -> e -> ([Double], e)
-    putter ys e = case tryPut ys e of
-      Nothing  -> (ys, e)
-      Just ret -> ret
-    tryPut ys e = do
-      let (h:t) = ys
-      de <- cast e
-      eh <- cast $ h `asTypeOf` de
-      return (t,eh)
+    getter :: GenericM (State.State [Double])
+    getter a = do
+      ys <- State.get
+      let da = fmap (flip asTypeOf (head ys)) $ cast a
+      case da of
+        Nothing -> return a
+        Just d -> do
+          State.put $ d:ys
+          return a
+
+putDoubles :: Data d => [Double] -> d -> d
+putDoubles ys0 d = State.evalState (everywhereM putter d) ys0
+  where
+    putter :: GenericM (State.State [Double])
+    putter a = do
+      ys <- State.get
+      let ma' = (cast =<<) $ fmap (asTypeOf (head ys)) $ cast a
+      case ma' of
+        Nothing -> return a
+        Just a' -> do
+          State.put $ tail ys
+          return a'
