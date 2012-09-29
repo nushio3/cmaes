@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards,ScopedTypeVariables #-}
 {-# OPTIONS -Wall #-}
 
 
@@ -7,15 +7,28 @@
 Usage:
 
 (1) create an optimization problem of type @Config@ by one of
-    @minimizer@, @minimizerIO@ etc.
+    @minimize@, @minimizeIO@ etc.
 
 (2) @run@ it.
+
+Use @minimizeT@ to optimize functions on traversable structures.
+
+>>> import qualified Data.Vector as V
+>>> let f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2)
+>>> bestVx <- run $ minimizeT f4 $ V.replicate 10 0
+>>> :t bestVx
+bestVx :: V.Vector Double
+>>> f4 bestVx < 1e-10
+True
+
+
 
 Let's optimize the following function /f(xs)/. @xs@ is a vector and
 @f@ has its minimum at @xs !! i = sqrt(i)@.
 
->>> let f xs = sum $ zipWith (\i x -> (x*abs x - i)**2) [0..] xs
->>> bestXs <- run $ minimizer f $ replicate 10 0
+>>> let f = sum . zipWith (\i x -> (x*abs x - i)**2) [0..] :: [Double] -> Double
+>>> let initXs = replicate 10 0                            :: [Double]
+>>> bestXs <- run $ minimize f initXs
 >>> f bestXs < 1e-10
 True
 
@@ -30,17 +43,17 @@ If your optimization is not working well, try:
 An example for scaling the function value:
 
 >>> let f2 xs = (/1e100) $ sum $ zipWith (\i x -> (x*abs x - i)**2) [0..] xs
->>> bestXs <- run $ (minimizer f2 $ replicate 10 0) {tolFun = Just 1e-111}
+>>> bestXs <- run $ (minimize f2 $ replicate 10 0) {tolFun = Just 1e-111}
 >>> f2 bestXs < 1e-110
 True
 
 An example for scaling the input values:
 
 >>> let f3 xs = sum $ zipWith (\i x -> (x*abs x - i)**2) [0,1e100..] xs
->>> let xs0 = replicate 10 0 :: [Double]
->>> let m3 = (minimizer f3 xs0) {scaling = Just (replicate 10 1e50)}
->>> xs1 <- run $ m3
->>> f3 xs1 / f3 xs0 < 1e-10
+>>> let xs30 = replicate 10 0 :: [Double]
+>>> let m3 = (minimize f3 xs30) {scaling = Just (replicate 10 1e50)}
+>>> xs31 <- run $ m3
+>>> f3 xs31 / f3 xs30 < 1e-10
 True
 
 -}
@@ -48,29 +61,40 @@ True
 
 module Numeric.Optimization.Algorithms.CMAES (
        run, Config(..), defaultConfig,
-       minimizer, minimizerIO,
+       minimize, minimizeIO,
+       minimizeT
 )where
 
 
-import Control.Monad
-import Data.List (isPrefixOf)
-import Data.Maybe
-import System.IO
-import System.Process
+import           Control.Monad hiding (forM_, mapM)
+import qualified Control.Monad.State as State
+import           Data.List (isPrefixOf)
+import           Data.Maybe
+import           Data.Foldable
+import           Data.Traversable
+import           System.IO
+import           System.Process
+import           Prelude hiding (concat, mapM, sum)
 
 import Paths_cmaes
 
--- | Optimizer configuration.
-data Config = Config
-  { funcIO        :: [Double] -> IO Double
+-- | Optimizer configuration. @tgt@ is the type of the value to be
+-- optimized.
+
+data Config tgt = Config
+  { funcIO        :: tgt -> IO Double
     -- ^ The Function to be optimized.
+  , projection    :: tgt -> [Double]
+    -- ^ Extract the parameters to be tuned from @tgt@.
+  , embedding     :: [Double] -> tgt
+    -- ^ Create a value of type @tgt@ from the parameters.
   , initXs        :: [Double]
-    -- ^ An initial guess of the solution.
+    -- ^ An initial guess of the parameters.
   , sigma0        :: Double
     -- ^ The global scaling factor.
   , scaling       :: Maybe [Double]
     -- ^ Typical deviation of each input parameters.
-  , typicalXs       :: Maybe [Double]
+  , typicalXs     :: Maybe [Double]
     -- ^ Typical mean of each input parameters.
   , tolFacUpX     :: Maybe Double
     -- ^ Terminate when one of the scaling grew too big
@@ -92,32 +116,58 @@ data Config = Config
 
 
 -- | The default @Config@ values.
-defaultConfig :: Config
+defaultConfig :: Config a
 defaultConfig = Config
-  { funcIO = error "funcIO undefined"
-  , initXs = error "initXs undefined"
-  , sigma0 = 0.25
-  , scaling = Nothing
-  , typicalXs = Nothing
-  , tolFacUpX = Just 1e10
-  , tolUpSigma = Just 1e20
-  , tolFun = Just 1e-11
+  { funcIO        = error "funcIO undefined"
+  , projection    = error "projection undefined"
+  , embedding     = error "embedding undefined"
+  , initXs        = error "initXs undefined"
+  , sigma0        = 0.25
+  , scaling       = Nothing
+  , typicalXs     = Nothing
+  , tolFacUpX     = Just 1e10
+  , tolUpSigma    = Just 1e20
+  , tolFun        = Just 1e-11
   , tolStagnation = Nothing
-  , tolX = Just 1e-11
-  , verbose = False
+  , tolX          = Just 1e-11
+  , verbose       = False
   }
 
 
 -- | Create a minimizing problem, given a pure function and an initial guess.
-minimizer :: ([Double]-> Double) -> [Double] -> Config
-minimizer f xs = defaultConfig{ funcIO =  return . f, initXs = xs}
+minimize :: ([Double]-> Double) -> [Double] -> Config [Double]
+minimize f xs = minimizeIO (return . f) xs
 
 -- | Create a minimizing problem, given an @IO@ function and an initial guess.
-minimizerIO :: ([Double]-> IO Double) -> [Double] -> Config
-minimizerIO fIO xs = defaultConfig{ funcIO = fIO, initXs = xs}
+minimizeIO :: ([Double]-> IO Double) -> [Double] -> Config [Double]
+minimizeIO fIO xs = 
+  defaultConfig
+  { funcIO     = fIO
+  , initXs     = xs
+  , projection = id
+  , embedding  = id
+  }
+
+-- | Create a minimizing problem for a function on traversable structure @t@.
+minimizeT :: (Traversable t) => (t Double-> Double) -> t Double -> Config (t Double)
+minimizeT f tx = minimizeTIO (return . f) tx
+
+-- | Create a minimizing problem for an effectful function on a traversable structure @t@.
+minimizeTIO :: (Traversable t) => (t Double-> IO Double) -> t Double -> Config (t Double)
+minimizeTIO fIO tx =
+  defaultConfig
+  { funcIO     = fIO
+  , initXs     = proj tx
+  , projection = proj
+  , embedding  = embd
+  }
+  where
+    proj = toList
+    embd = zipTWith (\_ y -> y) tx
+
 
 -- | Execute the optimizer and get the solution.
-run :: Config -> IO [Double]
+run :: forall tgt. Config tgt -> IO tgt
 run Config{..} = do
   fn <- getDataFileName wrapperFn
   (Just hin, Just hout, _, _) <- createProcess (proc "python2" [fn])
@@ -133,9 +183,9 @@ run Config{..} = do
       let ws = words str
       case ws!!0 of
         "a" -> do
-          return $ map read $ drop 1 ws
+          return $ embedding $ map read $ drop 1 ws
         "q" -> do
-          ans <- funcIO $ map read $ drop 1 ws
+          ans <- funcIO . embedding $ map read $ drop 1 ws
           sendLine hin $ show ans
           loop
         _ -> do
@@ -173,3 +223,11 @@ run Config{..} = do
       sendLine h str = do
         hPutStrLn h str
         hFlush h
+
+zipTWith :: (Traversable t1, Traversable t2) => (a->b->c) -> (t1 a) -> (t2 b) -> (t1 c)
+zipTWith op xs0 ys0 = State.evalState (mapM zipper xs0) (toList ys0)
+  where
+    zipper x = do
+      (y:ys) <- State.get
+      State.put ys
+      return (op x y)
