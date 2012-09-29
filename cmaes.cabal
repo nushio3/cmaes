@@ -25,13 +25,15 @@ library
   exposed-modules:   Numeric.Optimization.Algorithms.CMAES  
   -- other-modules:       
   build-depends:     base ==4.*
+                   , mtl  
                    , process
-
+                   
 Test-Suite test
   Main-Is:           Test.hs
   hs-source-dirs:    .
   Type:              exitcode-stdio-1.0
   Build-Depends:     base == 4.*
                    , cmaes
+                   , mtl  
                    , process
                    , doctest >=0.8

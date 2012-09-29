@@ -11,16 +11,6 @@ Usage:
 
 (2) @run@ it.
 
-Use @minimizeT@ to optimize functions on traversable structures.
-
->>> import qualified Data.Vector as V
->>> let f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2)
->>> bestVx <- run $ minimizeT f4 $ V.replicate 10 0
->>> :t bestVx
-bestVx :: V.Vector Double
->>> f4 bestVx < 1e-10
-True
-
 
 
 Let's optimize the following function /f(xs)/. @xs@ is a vector and
@@ -56,13 +46,22 @@ An example for scaling the input values:
 >>> f3 xs31 / f3 xs30 < 1e-10
 True
 
+Use @minimizeT@ to optimize functions on traversable structures.
+
+>>> import qualified Data.Vector as V
+>>> let f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2) :: V.Vector Double -> Double
+>>> bestVx <- run $ minimizeT f4 $ V.replicate 10 0              
+>>> f4 bestVx < 1e-10
+True
+
+
 -}
 
 
 module Numeric.Optimization.Algorithms.CMAES (
        run, Config(..), defaultConfig,
        minimize, minimizeIO,
-       minimizeT
+       minimizeT, minimizeTIO
 )where
 
 
