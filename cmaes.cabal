@@ -1,5 +1,5 @@
 name:                cmaes
-version:             0.1.1
+version:             0.2.0
 synopsis:            CMA-ES wrapper in Haskell
 description:
 
@@ -31,6 +31,7 @@ Data-Files:          cma.py, cmaes_wrapper.py
 
 library
   exposed-modules:   Numeric.Optimization.Algorithms.CMAES  
+                   , Paths_cmaes
   -- other-modules:       
   build-depends:     base ==4.*
                    , mtl  
