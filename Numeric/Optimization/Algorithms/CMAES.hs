@@ -6,16 +6,14 @@
 
 Usage:
 
-(1) create an optimization problem of type @Config@ by one of
-    @minimize@, @minimizeIO@ etc.
+(1) create an optimization problem of type `Config` by one of
+    `minimize`, `minimizeIO` etc.
 
-(2) @run@ it.
-
-
+(2) `run` it.
 
 
-Let's optimize the following function /f(xs)/. @xs@ is a vector and
-@f@ has its minimum at @xs !! i = sqrt(i)@.
+Let's optimize the following function /f(xs)/. @xs@ is a list of
+Double and @f@ has its minimum at @xs !! i = sqrt(i)@.
 
 >>> import Test.DocTest.Prop
 >>> let f = sum . zipWith (\i x -> (x*abs x - i)**2) [0..] :: [Double] -> Double
@@ -25,10 +23,10 @@ Let's optimize the following function /f(xs)/. @xs@ is a vector and
 
 If your optimization is not working well, try:
 
-* Set @scaling@ in the @Config@ to the appropriate search
+* Set `scaling` in the `Config` to the appropriate search
   range of each parameter.
 
-* Set @tolFun@ in the @Config@ to the appropriate scale of
+* Set `tolFun` in the `Config` to the appropriate scale of
   the function values.
 
 An example for scaling the function value:
@@ -45,7 +43,7 @@ An example for scaling the input values:
 >>> xs31 <- run $ m3
 >>> assert $ f3 xs31 / f3 xs30 < 1e-10
 
-Use @minimizeT@ to optimize functions on traversable structures.
+Use `minimizeT` to optimize functions on traversable structures.
 
 >>> import qualified Data.Vector as V
 >>> let f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2) :: V.Vector Double -> Double
@@ -54,7 +52,7 @@ Use @minimizeT@ to optimize functions on traversable structures.
 
 
 
-Or use @minimizeG@ to optimize functions of almost any type. Let's create a triangle ABC
+Or use `minimizeG` to optimize functions of almost any type. Let's create a triangle ABC
 so that AB = 3, AC = 4, BC = 5.
 
 >>> let dist (ax,ay) (bx,by) = ((ax-bx)**2 + (ay-by)**2)**0.5
@@ -67,6 +65,18 @@ Then the angle BAC should be orthogonal.
 
 >>> let [(ax,ay),(bx,by),(cx,cy)] = bestTriangle
 >>> assert $ abs ((bx-ax)*(cx-ax) + (by-ay)*(cy-ay)) < 1e-10
+
+
+When optimizing noisy functions, set `noiseHandling` = @True@ for better results.
+
+>>> import System.Random
+>>> let noise = randomRIO (0,1e-2)
+>>> let f6Pure = sum . zipWith (\i x -> (x*abs x - i)**2) [0..]
+>>> let f6 xs = fmap (f6Pure xs +) noise
+>>> xs60 <- run $ (minimizeIO f6 $ replicate 10 0) {noiseHandling = False}
+>>> xs61 <- run $ (minimizeIO f6 $ replicate 10 0) {noiseHandling = True}
+>>> assert $ f6Pure xs61 < f6Pure xs60
+
 
 
 
@@ -119,6 +129,13 @@ data Config tgt = Config
     -- ^ Typical mean of each input parameters.
     -- The length of this list too, is adjusted to be the same as
     -- initXs.
+  , noiseHandling :: Bool
+    -- ^ Assume the function to be rugged and/or noisy
+  , noiseReEvals  :: Maybe Int
+    -- ^ How many re-evaluation to make to estimate the noise.
+  , noiseEps      :: Maybe Double
+    -- ^ Perturb the parameters by this amount (relative to sigma)
+    -- to estimate the noise
   , tolFacUpX     :: Maybe Double
     -- ^ Terminate when one of the scaling grew too big
     -- (initial scaling was too small.)
@@ -148,6 +165,9 @@ defaultConfig = Config
   , sigma0        = 0.25
   , scaling       = Nothing
   , typicalXs     = Nothing
+  , noiseHandling = False
+  , noiseReEvals  = Nothing
+  , noiseEps      = Just 1e-7
   , tolFacUpX     = Just 1e10
   , tolUpSigma    = Just 1e20
   , tolFun        = Just 1e-11
@@ -243,6 +263,9 @@ run Config{..} = do
       options = concat $ map maybeToList
         [ "scaling_of_variables" `is` (fmap$adjustDim [1..] ) scaling
         , "typical_x"            `is` (fmap$adjustDim initXs) typicalXs
+        , "noise_handling"       `is` Just noiseHandling
+        , "noise_reevals"        `is` noiseReEvals
+        , "noise_eps"            `is` noiseEps
         , "tolfacupx"            `is` tolFacUpX
         , "tolupsigma"           `is` tolUpSigma
         , "tolfunhist"           `is` tolFun
