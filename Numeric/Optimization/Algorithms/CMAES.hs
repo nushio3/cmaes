@@ -41,7 +41,7 @@ An example for scaling the input values:
 
 >>> let f3 xs = sum $ zipWith (\i x -> (x*abs x - i)**2) [0,1e100..] xs
 >>> let xs30 = replicate 10 0 :: [Double]
->>> let m3 = (minimize f3 xs30) {scaling = Just (replicate 10 1e50)}
+>>> let m3 = (minimize f3 xs30) {scaling = Just (repeat 1e50)}
 >>> xs31 <- run $ m3
 >>> assert $ f3 xs31 / f3 xs30 < 1e-10
 
@@ -81,6 +81,7 @@ module Numeric.Optimization.Algorithms.CMAES (
 )where
 
 
+import           Control.Applicative ((<|>))
 import           Control.Monad hiding (forM_, mapM)
 import qualified Control.Monad.State as State
 import           Data.Data
@@ -232,8 +233,11 @@ run Config{..} = do
 
       adjustDim :: [a] -> [a] -> [a]
       adjustDim supply orig =
-        [if i < length orig then orig!!i else supply!!i
-        | i <- [0..probDim-1]]
+        take probDim $
+        catMaybes $
+        zipWith (<|>)
+          (map Just orig ++ repeat Nothing)
+          (map Just supply)
 
       options :: [(String, String)]
       options = concat $ map maybeToList
