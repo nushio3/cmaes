@@ -1,4 +1,4 @@
 This package is an aggregate of programs. cma.py (c) Nikolaus Hansen,
-2008-2012 is redistributed under GPL 2 or 3. The other programs (c)
-Takayuki Muranushi are licensed under MIT license. See the files
+2008-2012 is redistributed under GPL 2 or 3. All the other components
+(c) Takayuki Muranushi are licensed under MIT license. See the files
 LICENSE.GPL2, LICENSE.GPL3 and LICENSE.MIT for more details.
