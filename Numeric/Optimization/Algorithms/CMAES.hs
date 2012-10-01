@@ -11,13 +11,15 @@ Usage:
 
 (2) `run` it.
 
-
 Let's optimize the following function /f(xs)/. @xs@ is a list of
 Double and @f@ has its minimum at @xs !! i = sqrt(i)@.
 
 >>> import Test.DocTest.Prop
->>> let f = sum . zipWith (\i x -> (x*abs x - i)**2) [0..] :: [Double] -> Double
->>> let initXs = replicate 10 0                            :: [Double]
+>>> :set +m
+>>> let f :: [Double] -> Double
+>>>     f = sum . zipWith (\i x -> (x*abs x - i)**2) [0..]
+>>>     initXs :: [Double]     
+>>>     initXs = replicate 10 0                            
 >>> bestXs <- run $ minimize f initXs
 >>> assert $ f bestXs < 1e-10
 
@@ -46,39 +48,48 @@ An example for scaling the input values:
 Use `minimizeT` to optimize functions on traversable structures.
 
 >>> import qualified Data.Vector as V
->>> let f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2) :: V.Vector Double -> Double
+>>> let f4 :: V.Vector Double -> Double
+>>>     f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2)
 >>> bestVx <- run $ minimizeT f4 $ V.replicate 10 0
 >>> assert $ f4 bestVx < 1e-10
 
+Or use `minimizeG` to optimize functions of any type that is Data
+and that contains `Double`s. Here is an example that deal with 
+Triangles.
 
+>>> :set -XDeriveDataTypeable
+>>> import Data.Data
+>>> data Pt = Pt Double Double deriving (Typeable,Data)
+>>> let dist (Pt ax ay) (Pt bx by) = ((ax-bx)**2 + (ay-by)**2)**0.5
+>>> data Triangle = Triangle Pt Pt Pt deriving (Typeable,Data)
 
-Or use `minimizeG` to optimize functions of almost any type. Let's create a triangle ABC
-so that AB = 3, AC = 4, BC = 5.
-
->>> let dist (ax,ay) (bx,by) = ((ax-bx)**2 + (ay-by)**2)**0.5
->>> let f5 [a,b,c] = (dist a b - 3.0)**2 + (dist a c - 4.0)**2 + (dist b c - 5.0)**2
->>> bestTriangle <- run $ (minimizeG f5 [(0,0),(0,0),(0,0)]){tolFun = Just 1e-20}
+Let's create a triangle ABC so that AB = 3, AC = 4, BC = 5.
+>>> let f5 :: Triangle -> Double
+>>>     f5 (Triangle a b c) = (dist a b - 3.0)**2 + (dist a c - 4.0)**2 + (dist b c - 5.0)**2
+>>> let triangle0 = Triangle o o o where o = Pt 0 0
+>>> bestTriangle <- run $ (minimizeG f5 triangle0){tolFun = Just 1e-20}
 >>> assert $ f5 bestTriangle < 1e-10
-
 
 Then the angle BAC should be orthogonal.
 
->>> let [(ax,ay),(bx,by),(cx,cy)] = bestTriangle
+>>> let (Triangle (Pt ax ay) (Pt bx by) (Pt cx cy)) = bestTriangle
 >>> assert $ abs ((bx-ax)*(cx-ax) + (by-ay)*(cy-ay)) < 1e-10
 
 
-When optimizing noisy functions, set `noiseHandling` = @True@ for better results.
+When optimizing noisy functions, set `noiseHandling` = @True@ (and
+increase `noiseReEvals`) for better results.
 
 >>> import System.Random
 >>> let noise = randomRIO (0,1e-2)
 >>> let f6Pure = sum . zipWith (\i x -> (x*abs x - i)**2) [0..]
 >>> let f6 xs = fmap (f6Pure xs +) noise
 >>> xs60 <- run $ (minimizeIO f6 $ replicate 10 0) {noiseHandling = False}
->>> xs61 <- run $ (minimizeIO f6 $ replicate 10 0) {noiseHandling = True}
+>>> xs61 <- run $ (minimizeIO f6 $ replicate 10 0) {noiseHandling = True,noiseReEvals=Just 10}
 >>> assert $ f6Pure xs61 < f6Pure xs60
 
-
-
+(note : with the default value of `noiseReEvals` the test above failed
+335 times out of 1111 trials. When noiseReEvals == 10 it passed consecutive
+1111 trials.)
 
 -}
 
@@ -152,10 +163,15 @@ data Config tgt = Config
     -- than this value.
   , verbose       :: Bool
     -- ^ Repeat the CMA-ES output into stderr.
+  , otherArgs     :: [(String, String)]
+    -- ^ Interfaces for passing other configuration arguments directly to
+    -- @cma.py@
   }
 
 
--- | The default @Config@ values.
+-- | The default @Config@ values. Also consult the original document
+-- <http://www.lri.fr/~hansen/pythoncma.html#-fmin> for default values
+-- of the parameters not listed here.
 defaultConfig :: Config a
 defaultConfig = Config
   { funcIO        = error "funcIO undefined"
@@ -174,6 +190,7 @@ defaultConfig = Config
   , tolStagnation = Nothing
   , tolX          = Just 1e-11
   , verbose       = False
+  , otherArgs     = []
   }
 
 
@@ -271,7 +288,7 @@ run Config{..} = do
         , "tolfunhist"           `is` tolFun
         , "tolstagnation"        `is` tolStagnation
         , "tolx"                 `is` tolX
-        ]
+        ] ++ [otherArgs]
 
       is :: Show a => String -> Maybe a -> Maybe (String,String)
       is key = fmap (\val -> (key, show val))
