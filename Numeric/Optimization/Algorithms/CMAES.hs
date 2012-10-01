@@ -15,11 +15,8 @@ Let's optimize the following function /f(xs)/. @xs@ is a list of
 Double and @f@ has its minimum at @xs !! i = sqrt(i)@.
 
 >>> import Test.DocTest.Prop
->>> :set +m
->>> let f :: [Double] -> Double
->>>     f = sum . zipWith (\i x -> (x*abs x - i)**2) [0..]
->>>     initXs :: [Double]     
->>>     initXs = replicate 10 0                            
+>>> let f = sum . zipWith (\i x -> (x*abs x - i)**2) [0..] :: [Double] -> Double
+>>> let initXs = replicate 10 0                            :: [Double]     
 >>> bestXs <- run $ minimize f initXs
 >>> assert $ f bestXs < 1e-10
 
@@ -48,8 +45,10 @@ An example for scaling the input values:
 Use `minimizeT` to optimize functions on traversable structures.
 
 >>> import qualified Data.Vector as V
->>> let f4 :: V.Vector Double -> Double
->>>     f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2)
+>>> let f4 = V.sum . V.imap (\i x -> (x*abs x - fromIntegral i)**2)
+
+>>> :t f4
+f4 :: V.Vector Double -> Double
 >>> bestVx <- run $ minimizeT f4 $ V.replicate 10 0
 >>> assert $ f4 bestVx < 1e-10
 
@@ -63,10 +62,12 @@ Triangles.
 >>> let dist (Pt ax ay) (Pt bx by) = ((ax-bx)**2 + (ay-by)**2)**0.5
 >>> data Triangle = Triangle Pt Pt Pt deriving (Typeable,Data)
 
-Let's create a triangle ABC so that AB = 3, AC = 4, BC = 5.
->>> let f5 :: Triangle -> Double
->>>     f5 (Triangle a b c) = (dist a b - 3.0)**2 + (dist a c - 4.0)**2 + (dist b c - 5.0)**2
+Let us create a triangle ABC so that AB = 3, AC = 4, BC = 5.
+
+>>> let f5 (Triangle a b c) = (dist a b - 3.0)**2 + (dist a c - 4.0)**2 + (dist b c - 5.0)**2
 >>> let triangle0 = Triangle o o o where o = Pt 0 0
+>>> :t f5
+f5 :: Triangle -> Double
 >>> bestTriangle <- run $ (minimizeG f5 triangle0){tolFun = Just 1e-20}
 >>> assert $ f5 bestTriangle < 1e-10
 
@@ -83,6 +84,8 @@ increase `noiseReEvals`) for better results.
 >>> let noise = randomRIO (0,1e-2)
 >>> let f6Pure = sum . zipWith (\i x -> (x*abs x - i)**2) [0..]
 >>> let f6 xs = fmap (f6Pure xs +) noise
+>>> :t f6
+f6 :: [Double] -> IO Double
 >>> xs60 <- run $ (minimizeIO f6 $ replicate 10 0) {noiseHandling = False}
 >>> xs61 <- run $ (minimizeIO f6 $ replicate 10 0) {noiseHandling = True,noiseReEvals=Just 10}
 >>> assert $ f6Pure xs61 < f6Pure xs60
@@ -90,6 +93,7 @@ increase `noiseReEvals`) for better results.
 (note : with the default value of `noiseReEvals` the test above failed
 335 times out of 1111 trials. When noiseReEvals == 10 it passed consecutive
 1111 trials.)
+
 
 -}
 
@@ -99,6 +103,7 @@ module Numeric.Optimization.Algorithms.CMAES (
        minimize, minimizeIO,
        minimizeT, minimizeTIO,
        minimizeG, minimizeGIO,
+       getDoubles, putDoubles
 )where
 
 
