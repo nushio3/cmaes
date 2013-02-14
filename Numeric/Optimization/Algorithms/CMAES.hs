@@ -105,7 +105,7 @@ module Numeric.Optimization.Algorithms.CMAES (
 )where
 
 
-import           Control.Applicative ((<|>))
+import           Control.Applicative ((<|>), (<$>))
 import           Control.Monad hiding (forM_, mapM)
 import qualified Control.Monad.State as State
 import           Data.Data
@@ -114,7 +114,10 @@ import           Data.List (isPrefixOf)
 import           Data.Maybe
 import           Data.Foldable
 import           Data.Traversable
+import           Safe (atDef, headDef)
 import           System.IO
+import qualified System.IO.Strict as Strict
+import           System.IO.Unsafe(unsafePerformIO)
 import           System.Process
 import           Prelude hiding (concat, mapM, sum)
 
@@ -242,11 +245,40 @@ minimizeGIO fIO initA =
   , embedding  = flip putDoubles initA
   }
 
+
+
+-- | Silently check for python version and place the correct shebang 
+wrapperFnFullPath :: FilePath
+wrapperFnFullPath = unsafePerformIO $ do
+  fullFn <- getDataFileName wrapperFn
+  (_,hin,_,hproc) <- runInteractiveCommand "python --version"
+  str <- hGetContents hin
+  _ <- waitForProcess hproc
+  let pythonVersion :: Int
+      pythonVersion = read $ take 1 $ atDef "2" (words str) 1 
+  
+      correctShebang
+        | pythonVersion == 2 = "#!/usr/bin/env python"
+        | otherwise          = "#!/usr/bin/env python2"
+
+  wrapperLines <- lines <$> Strict.readFile fullFn
+    
+  when (headDef "" wrapperLines /= correctShebang) $ do
+    writeFile fullFn $ unlines $ correctShebang : drop 1 wrapperLines
+
+  return fullFn
+
+  where
+    wrapperFn = "cmaes_wrapper.py"
+
+{-# NOINLINE wrapperFnFullPath #-}
+
+
+
 -- | Execute the optimizer and get the solution.
 run :: forall tgt. Config tgt -> IO tgt
 run Config{..} = do
-  fn <- getDataFileName wrapperFn
-  (Just hin, Just hout, _, hproc) <- createProcess (proc "python2" [fn])
+  (Just hin, Just hout, _, hproc) <- createProcess (proc "python2" [wrapperFnFullPath])
     { std_in = CreatePipe, std_out = CreatePipe }
   sendLine hin $ unwords (map show initXs)
   sendLine hin $ show sigma0
@@ -267,7 +299,7 @@ run Config{..} = do
         _ -> do
           fail "ohmy god"
   r <- loop
-  waitForProcess hproc
+  _ <- waitForProcess hproc
   return r
     where
       probDim :: Int
@@ -298,8 +330,7 @@ run Config{..} = do
       is :: Show a => String -> Maybe a -> Maybe (String,String)
       is key = fmap (\val -> (key, show val))
 
-      wrapperFn, commHeader :: String
-      wrapperFn = "cmaes_wrapper.py"
+      commHeader :: String
       commHeader = "<CMAES_WRAPPER_PY2HS>"
 
       recvLine :: Handle -> IO String
