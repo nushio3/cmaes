@@ -246,7 +246,7 @@ minimizeGIO fIO initA =
 run :: forall tgt. Config tgt -> IO tgt
 run Config{..} = do
   fn <- getDataFileName wrapperFn
-  (Just hin, Just hout, _, _) <- createProcess (proc "python2" [fn])
+  (Just hin, Just hout, _, hproc) <- createProcess (proc "python2" [fn])
     { std_in = CreatePipe, std_out = CreatePipe }
   sendLine hin $ unwords (map show initXs)
   sendLine hin $ show sigma0
@@ -266,7 +266,9 @@ run Config{..} = do
           loop
         _ -> do
           fail "ohmy god"
-  loop
+  r <- loop
+  waitForProcess hproc
+  return r
     where
       probDim :: Int
       probDim = length initXs
