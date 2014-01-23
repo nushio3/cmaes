@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, RecordWildCards,ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports, RankNTypes, RecordWildCards,ScopedTypeVariables #-}
 {-# OPTIONS -Wall #-}
 
 
@@ -107,7 +107,7 @@ module Numeric.Optimization.Algorithms.CMAES (
 
 import           Control.Applicative ((<|>), (<$>))
 import           Control.Monad hiding (forM_, mapM)
-import qualified Control.Monad.State as State
+import qualified "mtl" Control.Monad.State as State
 import           Data.Data
 import           Data.Generics
 import           Data.List (isPrefixOf)
@@ -116,7 +116,7 @@ import           Data.Foldable
 import           Data.Traversable
 import           Safe (atDef, headDef)
 import           System.IO
-import qualified System.IO.Strict as Strict
+import qualified "strict" System.IO.Strict as Strict
 import           System.IO.Unsafe(unsafePerformIO)
 import           System.Process
 import           Prelude hiding (concat, mapM, sum)
@@ -172,6 +172,10 @@ data Config tgt = Config
   , otherArgs     :: [(String, String)]
     -- ^ Interfaces for passing other configuration arguments directly to
     -- @cma.py@
+  , pythonPath    :: Maybe FilePath
+    -- path to python (default: automatic detection)
+  , cmaesWrapperPath :: Maybe FilePath
+    -- path to wrapper script (default: in the data folder created by cabal)
   }
 
 
@@ -197,6 +201,8 @@ defaultConfig = Config
   , tolX          = Just 1e-11
   , verbose       = False
   , otherArgs     = []
+  , pythonPath    = Nothing
+  , cmaesWrapperPath = Nothing
   }
 
 
@@ -278,7 +284,10 @@ wrapperFnFullPath = unsafePerformIO $ do
 -- | Execute the optimizer and get the solution.
 run :: forall tgt. Config tgt -> IO tgt
 run Config{..} = do
-  (Just hin, Just hout, _, hproc) <- createProcess (proc "python2" [wrapperFnFullPath])
+  let pythonPath0 = maybe "python2" id pythonPath
+      wrapperPath0 = maybe wrapperFnFullPath id cmaesWrapperPath
+
+  (Just hin, Just hout, _, hproc) <- createProcess (proc pythonPath0 [wrapperPath0])
     { std_in = CreatePipe, std_out = CreatePipe }
   sendLine hin $ unwords (map show initXs)
   sendLine hin $ show sigma0
